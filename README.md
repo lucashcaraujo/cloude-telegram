@@ -14,14 +14,14 @@
 </p>
 
 <p align="center">
-  <a href="https://lucashcaraujo.github.io/cloude-telegram/">📖 Docs</a> ·
+  <code>npm install -g @lucashca/tgcc</code>
+</p>
+
+<p align="center">
+  <a href="https://lucashcaraujo.github.io/cloude-telegram/">📖 Documentation & Website</a> ·
   <a href="https://www.npmjs.com/package/@lucashca/tgcc">📦 npm</a> ·
   <a href="https://github.com/lucashcaraujo/cloude-telegram/issues">🐛 Issues</a>
 </p>
-
-```bash
-npm install -g @lucashca/tgcc
-```
 
 ---
 
