@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { runInit } from "../src/cli/init.js";
 import { runStart } from "../src/cli/start.js";
 import { runConfigShow, runConfigSet } from "../src/cli/config.js";
+import { runReset } from "../src/cli/reset.js";
 import { setLogLevel } from "../src/utils/logger.js";
 
 const program = new Command();
@@ -47,6 +48,13 @@ configCmd
   .description("Set a configuration value")
   .action((key: string, value: string) => {
     runConfigSet(key, value);
+  });
+
+program
+  .command("reset")
+  .description("Delete all config and sessions, then re-run init")
+  .action(async () => {
+    await runReset();
   });
 
 program.parse();

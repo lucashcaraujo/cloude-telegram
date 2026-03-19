@@ -82,12 +82,13 @@ export function createHandlers(config: AppConfig) {
     log("info", `[chat:${chatId}] Message received: "${text.slice(0, 100)}${text.length > 100 ? "..." : ""}"`);
     activeRequests.add(chatId);
 
-    const typingInterval = setInterval(() => {
-      ctx.sendChatAction("typing").catch(() => {});
-    }, 4000);
-
     try {
-      await ctx.sendChatAction("typing");
+      // Send a "Processing..." message that will be deleted when the response arrives
+      const processingMsg = await ctx.reply("⏳ Processing...");
+
+      const typingInterval = setInterval(() => {
+        ctx.sendChatAction("typing").catch(() => {});
+      }, 3000);
 
       log("info", `[chat:${chatId}] Sending to Claude Code...`);
       const startTime = Date.now();
@@ -102,6 +103,9 @@ export function createHandlers(config: AppConfig) {
       log("info", `[chat:${chatId}] Response received (${elapsed}s, $${response.cost.toFixed(4)})`);
 
       clearInterval(typingInterval);
+
+      // Delete the "Processing..." message
+      await ctx.deleteMessage(processingMsg.message_id).catch(() => {});
 
       if (response.error) {
         log("error", `[chat:${chatId}] Error: ${response.error}`);
@@ -139,7 +143,6 @@ export function createHandlers(config: AppConfig) {
         await ctx.reply(`💰 Cost: $${response.cost.toFixed(4)}`);
       }
     } catch (err) {
-      clearInterval(typingInterval);
       const msg = err instanceof Error ? err.message : String(err);
       await ctx.reply(`Error: ${msg}`);
     } finally {
