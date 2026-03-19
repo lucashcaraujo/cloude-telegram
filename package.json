@@ -1,11 +1,11 @@
 {
-  "name": "claude-telegram",
+  "name": "telegram-claude-code",
   "version": "1.0.0",
   "description": "Control Claude Code remotely via Telegram",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "claude-telegram": "dist/bin/claude-telegram.js"
+    "telegram-claude-code": "dist/bin/claude-telegram.js"
   },
   "scripts": {
     "build": "tsc",
@@ -23,6 +23,15 @@
   ],
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lucashcaraujo/cloude-telegram.git"
+  },
+  "homepage": "https://github.com/lucashcaraujo/cloude-telegram#readme",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },
