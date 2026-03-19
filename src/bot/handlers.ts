@@ -3,6 +3,7 @@ import path from "node:path";
 import type { Context } from "telegraf";
 import { sendMessage, clearSession } from "../claude/session.js";
 import type { AppConfig } from "../config/config.js";
+import { log } from "../utils/logger.js";
 
 const MAX_MESSAGE_LENGTH = 4096;
 
@@ -42,6 +43,7 @@ export function createHandlers(config: AppConfig) {
 
   async function handleNew(ctx: Context): Promise<void> {
     const chatId = String(ctx.chat!.id);
+    log("info", `[chat:${chatId}] Session cleared`);
     clearSession(chatId);
     await ctx.reply("Session cleared. Next message starts a new conversation.");
   }
@@ -72,10 +74,12 @@ export function createHandlers(config: AppConfig) {
     if (!text) return;
 
     if (activeRequests.has(chatId)) {
+      log("debug", `[chat:${chatId}] Request blocked — already processing`);
       await ctx.reply("Please wait for the current request to finish.");
       return;
     }
 
+    log("info", `[chat:${chatId}] Message received: "${text.slice(0, 100)}${text.length > 100 ? "..." : ""}"`);
     activeRequests.add(chatId);
 
     const typingInterval = setInterval(() => {
@@ -85,19 +89,34 @@ export function createHandlers(config: AppConfig) {
     try {
       await ctx.sendChatAction("typing");
 
+      log("info", `[chat:${chatId}] Sending to Claude Code...`);
+      const startTime = Date.now();
+
       const response = await sendMessage(
         String(chatId),
         text,
         config.claude
       );
 
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      log("info", `[chat:${chatId}] Response received (${elapsed}s, $${response.cost.toFixed(4)})`);
+
       clearInterval(typingInterval);
+
+      if (response.error) {
+        log("error", `[chat:${chatId}] Error: ${response.error}`);
+      }
 
       if (response.text) {
         const chunks = splitMessage(response.text);
+        log("debug", `[chat:${chatId}] Sending ${chunks.length} message(s) to Telegram`);
         for (const chunk of chunks) {
           await ctx.reply(chunk);
         }
+      }
+
+      if (response.files.length > 0) {
+        log("info", `[chat:${chatId}] Sending ${response.files.length} file(s)`);
       }
 
       for (const filePath of response.files) {

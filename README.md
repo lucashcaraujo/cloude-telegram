@@ -1,4 +1,4 @@
-# telegram-claude-code
+# tgcc
 
 Control [Claude Code](https://docs.anthropic.com/en/docs/claude-code) remotely via Telegram. Send messages from anywhere and let Claude Code edit files, run commands, and manage your projects — all through a Telegram bot.
 
@@ -29,13 +29,13 @@ The bot is a **thin proxy** — it just routes messages between Telegram and the
 ## Installation
 
 ```bash
-npm install -g telegram-claude-code
+npm install -g tgcc
 ```
 
 Or run directly with npx:
 
 ```bash
-npx telegram-claude-code init
+npx tgcc init
 ```
 
 ## Quick Start
@@ -43,7 +43,7 @@ npx telegram-claude-code init
 ### 1. Setup
 
 ```bash
-telegram-claude-code init
+tgcc init
 ```
 
 The wizard will ask for:
@@ -54,7 +54,7 @@ The wizard will ask for:
 ### 2. Start the bot
 
 ```bash
-telegram-claude-code start
+tgcc start
 ```
 
 ### 3. Chat
@@ -75,22 +75,22 @@ Any other text message is sent directly to Claude Code.
 
 ```bash
 # Interactive setup
-telegram-claude-code init
+tgcc init
 
 # Start the bot
-telegram-claude-code start
+tgcc start
 
 # Show current config
-telegram-claude-code config show
+tgcc config show
 
 # Update a config value
-telegram-claude-code config set telegram.whitelist 123456789,987654321
-telegram-claude-code config set claude.workingDirectory /path/to/project
+tgcc config set telegram.whitelist 123456789,987654321
+tgcc config set claude.workingDirectory /path/to/project
 ```
 
 ## Configuration
 
-Config is stored at `~/.telegram-claude-code/config.json`:
+Config is stored at `~/.tgcc/config.json`:
 
 ```json
 {

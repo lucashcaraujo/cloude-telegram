@@ -2,6 +2,7 @@ import inquirer from "inquirer";
 import fs from "node:fs";
 import path from "node:path";
 import { saveConfig, getConfigPath, configExists, type AppConfig } from "../config/config.js";
+import { runStart } from "./start.js";
 
 export async function runInit(): Promise<void> {
   console.log("Claude Telegram — Setup\n");
@@ -31,7 +32,11 @@ export async function runInit(): Promise<void> {
     {
       type: "input",
       name: "chatId",
-      message: "Your Telegram chat ID:",
+      message:
+        "Your Telegram chat ID\n" +
+        "  (To find it: open Telegram, search for @userinfobot, send /start,\n" +
+        "   and it will reply with your chat ID)\n" +
+        "  Chat ID:",
       validate: (v: string) => {
         const n = Number(v);
         return !isNaN(n) && n > 0 ? true : "Must be a valid number";
@@ -65,5 +70,19 @@ export async function runInit(): Promise<void> {
 
   saveConfig(config);
   console.log(`\nConfig saved to ${getConfigPath()}`);
-  console.log('Run "claude-telegram start" to launch the bot.');
+
+  const { startNow } = await inquirer.prompt([
+    {
+      type: "confirm",
+      name: "startNow",
+      message: "Start the bot now?",
+      default: true,
+    },
+  ]);
+
+  if (startNow) {
+    await runStart();
+  } else {
+    console.log('Run "tgcc start" to launch the bot.');
+  }
 }
