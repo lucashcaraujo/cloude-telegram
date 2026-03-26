@@ -1,5 +1,5 @@
-import { query } from "@anthropic-ai/claude-code";
-import type { SDKResultMessage, SDKAssistantMessage, Options } from "@anthropic-ai/claude-code";
+import { query } from "@anthropic-ai/claude-agent-sdk";
+import type { SDKResultMessage, SDKAssistantMessage, Options } from "@anthropic-ai/claude-agent-sdk";
 import { loadSessions, saveSessions, type ClaudeConfig } from "../config/config.js";
 import { log } from "../utils/logger.js";
 
@@ -103,7 +103,7 @@ export async function sendMessage(
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     const hint = errorMsg.includes("exited with code 1")
-      ? "\n\nPossible causes:\n• Claude Code CLI not installed (npm install -g @anthropic-ai/claude-code)\n• Not authenticated (run: claude login)\n• ANTHROPIC_API_KEY not set in environment"
+      ? "\n\nPossible causes:\n• Claude Code CLI not installed (npm install -g @anthropic-ai/claude-agent-sdk)\n• Not authenticated (run: claude login)\n• ANTHROPIC_API_KEY not set in environment"
       : "";
     log("error", `[chat:${chatId}] Exception: ${errorMsg}`);
     return {
