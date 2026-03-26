@@ -33,6 +33,78 @@ function persistSessions(): void {
   saveSessions(obj);
 }
 
+async function executeQuery(
+  chatId: string,
+  message: string,
+  config: ClaudeConfig,
+  resumeSession?: string,
+): Promise<ClaudeResponse> {
+  const options: Options = {
+    cwd: config.workingDirectory,
+    allowedTools: config.allowedTools,
+    permissionMode: config.permissionMode as Options["permissionMode"],
+  };
+
+  if (resumeSession) {
+    options.resume = resumeSession;
+  }
+
+  const files: string[] = [];
+  let resultText = "";
+  let sessionId = resumeSession ?? "";
+  let cost = 0;
+
+  log("debug", `[chat:${chatId}] Starting query (cwd: ${config.workingDirectory}, session: ${resumeSession ?? "new"})`);
+  const conversation = query({ prompt: message, options });
+
+  for await (const msg of conversation) {
+    log("debug", `[chat:${chatId}] SDK message: type=${msg.type}${"subtype" in msg ? ` subtype=${msg.subtype}` : ""}`);
+
+    if (msg.type === "system" && "session_id" in msg) {
+      sessionId = msg.session_id as string;
+    }
+
+    if (msg.type === "assistant") {
+      const assistant = msg as SDKAssistantMessage;
+      if (assistant.message?.content) {
+        for (const block of assistant.message.content) {
+          if ("type" in block && block.type === "tool_use") {
+            const input = block.input as Record<string, unknown>;
+            if (
+              ["Write", "Edit"].includes(block.name) &&
+              typeof input.file_path === "string"
+            ) {
+              files.push(input.file_path);
+            }
+          }
+        }
+      }
+    }
+
+    if (msg.type === "result") {
+      const result = msg as SDKResultMessage;
+      if (result.subtype === "success") {
+        resultText = (result as Extract<SDKResultMessage, { subtype: "success" }>).result;
+        cost = (result as Extract<SDKResultMessage, { subtype: "success" }>).total_cost_usd;
+      } else {
+        const errors = "errors" in result ? (result as any).errors : [];
+        resultText = `Error: ${result.subtype}`;
+        log("error", `[chat:${chatId}] SDK error: ${result.subtype} — ${Array.isArray(errors) ? errors.join(", ") : errors}`);
+      }
+    }
+  }
+
+  sessionMap.set(chatId, sessionId);
+  persistSessions();
+
+  return { text: resultText, sessionId, files: [...new Set(files)], cost };
+}
+
+function isSessionNotFound(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("No conversation found with session ID");
+}
+
 export async function sendMessage(
   chatId: string,
   message: string,
@@ -40,75 +112,30 @@ export async function sendMessage(
 ): Promise<ClaudeResponse> {
   const existingSession = sessionMap.get(chatId);
 
-  const options: Options = {
-    cwd: config.workingDirectory,
-    allowedTools: config.allowedTools,
-    permissionMode: config.permissionMode as Options["permissionMode"],
-  };
-
-  if (existingSession) {
-    options.resume = existingSession;
-  }
-
-  const files: string[] = [];
-  let resultText = "";
-  let sessionId = existingSession ?? "";
-  let cost = 0;
-
   try {
-    log("debug", `[chat:${chatId}] Starting query (cwd: ${config.workingDirectory}, session: ${existingSession ?? "new"})`);
-    const conversation = query({ prompt: message, options });
-
-    for await (const msg of conversation) {
-      log("debug", `[chat:${chatId}] SDK message: type=${msg.type}${"subtype" in msg ? ` subtype=${msg.subtype}` : ""}`);
-
-      if (msg.type === "system" && "session_id" in msg) {
-        sessionId = msg.session_id as string;
-      }
-
-      if (msg.type === "assistant") {
-        const assistant = msg as SDKAssistantMessage;
-        if (assistant.message?.content) {
-          for (const block of assistant.message.content) {
-            if ("type" in block && block.type === "tool_use") {
-              const input = block.input as Record<string, unknown>;
-              if (
-                ["Write", "Edit"].includes(block.name) &&
-                typeof input.file_path === "string"
-              ) {
-                files.push(input.file_path);
-              }
-            }
-          }
-        }
-      }
-
-      if (msg.type === "result") {
-        const result = msg as SDKResultMessage;
-        if (result.subtype === "success") {
-          resultText = (result as Extract<SDKResultMessage, { subtype: "success" }>).result;
-          cost = (result as Extract<SDKResultMessage, { subtype: "success" }>).total_cost_usd;
-        } else {
-          const errors = "errors" in result ? (result as any).errors : [];
-          resultText = `Error: ${result.subtype}`;
-          log("error", `[chat:${chatId}] SDK error: ${result.subtype} — ${Array.isArray(errors) ? errors.join(", ") : errors}`);
-        }
+    return await executeQuery(chatId, message, config, existingSession);
+  } catch (err) {
+    // If session not found, clear it and retry with a fresh session
+    if (existingSession && isSessionNotFound(err)) {
+      log("warn", `[chat:${chatId}] Session ${existingSession} not found, starting fresh`);
+      clearSession(chatId);
+      try {
+        return await executeQuery(chatId, message, config);
+      } catch (retryErr) {
+        const errorMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+        log("error", `[chat:${chatId}] Retry failed: ${errorMsg}`);
+        return { text: `Error: ${errorMsg}`, sessionId: "", files: [], cost: 0, error: errorMsg };
       }
     }
 
-    sessionMap.set(chatId, sessionId);
-    persistSessions();
-
-    return { text: resultText, sessionId, files: [...new Set(files)], cost };
-  } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     const hint = errorMsg.includes("exited with code 1")
-      ? "\n\nPossible causes:\n• Claude Code CLI not installed (npm install -g @anthropic-ai/claude-agent-sdk)\n• Not authenticated (run: claude login)\n• ANTHROPIC_API_KEY not set in environment"
+      ? "\n\nPossible causes:\n• Claude Code CLI not installed (npm install -g @anthropic-ai/claude-code)\n• Not authenticated (run: claude login)\n• ANTHROPIC_API_KEY not set in environment"
       : "";
     log("error", `[chat:${chatId}] Exception: ${errorMsg}`);
     return {
       text: `Error: ${errorMsg}${hint}`,
-      sessionId,
+      sessionId: existingSession ?? "",
       files: [],
       cost: 0,
       error: errorMsg,
