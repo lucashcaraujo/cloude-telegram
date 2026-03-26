@@ -1,6 +1,7 @@
 import { query } from "@anthropic-ai/claude-code";
-import type { SDKMessage, SDKResultMessage, SDKAssistantMessage, Options } from "@anthropic-ai/claude-code";
+import type { SDKResultMessage, SDKAssistantMessage, Options } from "@anthropic-ai/claude-code";
 import { loadSessions, saveSessions, type ClaudeConfig } from "../config/config.js";
+import { log } from "../utils/logger.js";
 
 interface ClaudeResponse {
   text: string;
@@ -55,9 +56,12 @@ export async function sendMessage(
   let cost = 0;
 
   try {
+    log("debug", `[chat:${chatId}] Starting query (cwd: ${config.workingDirectory}, session: ${existingSession ?? "new"})`);
     const conversation = query({ prompt: message, options });
 
     for await (const msg of conversation) {
+      log("debug", `[chat:${chatId}] SDK message: type=${msg.type}${"subtype" in msg ? ` subtype=${msg.subtype}` : ""}`);
+
       if (msg.type === "system" && "session_id" in msg) {
         sessionId = msg.session_id as string;
       }
@@ -85,7 +89,9 @@ export async function sendMessage(
           resultText = (result as Extract<SDKResultMessage, { subtype: "success" }>).result;
           cost = (result as Extract<SDKResultMessage, { subtype: "success" }>).total_cost_usd;
         } else {
+          const errors = "errors" in result ? (result as any).errors : [];
           resultText = `Error: ${result.subtype}`;
+          log("error", `[chat:${chatId}] SDK error: ${result.subtype} — ${Array.isArray(errors) ? errors.join(", ") : errors}`);
         }
       }
     }
@@ -96,8 +102,12 @@ export async function sendMessage(
     return { text: resultText, sessionId, files: [...new Set(files)], cost };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
+    const hint = errorMsg.includes("exited with code 1")
+      ? "\n\nPossible causes:\n• Claude Code CLI not installed (npm install -g @anthropic-ai/claude-code)\n• Not authenticated (run: claude login)\n• ANTHROPIC_API_KEY not set in environment"
+      : "";
+    log("error", `[chat:${chatId}] Exception: ${errorMsg}`);
     return {
-      text: `Error: ${errorMsg}`,
+      text: `Error: ${errorMsg}${hint}`,
       sessionId,
       files: [],
       cost: 0,
